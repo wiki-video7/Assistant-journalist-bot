@@ -1,0 +1,17 @@
+async def handle_news(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """مدیریت بخش اخبار"""
+        query = update.callback_query
+        await query.answer()
+        
+        if query.data == "show_content_menu":
+            keyboard = MainKeyboard.get_content_menu()
+            await query.edit_message_text(
+                "📰 **بخش تولید محتوا**\n\nگزینه مورد نظر را انتخاب کنید:",
+                reply_markup=keyboard
+            )
+        elif query.data == "show_research_menu":
+            keyboard = MainKeyboard.get_research_menu()
+            await query.edit_message_text(
+                "🔍 **بخش تحقیق و تحلیل**\n\nگزینه مورد نظر را انتخاب کنید:",
+                reply_markup=keyboard
+            )

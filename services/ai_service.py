@@ -1,109 +1,94 @@
-# services/ai_service.py - اصلاح شده
+# services/ai_service.py - اصلاح‌شده
 
-import openai
+from openai import OpenAI
 import google.generativeai as genai
 from core.config import config
-import logging
 import asyncio
+import logging
 
 logger = logging.getLogger(__name__)
 
 class AIService:
+    """سرویس AI با تماس‌های صحیح"""
+    
     def __init__(self):
-        # تنظیم OpenAI
+        # تنظیم سرویس‌ها
+        self.openai_client = None
         if config.OPENAI_API_KEY:
-            openai.api_key = config.OPENAI_API_KEY
+            self.openai_client = OpenAI(api_key=config.OPENAI_API_KEY)
             
-        # تنظیم Gemini
         if config.GEMINI_API_KEY:
             genai.configure(api_key=config.GEMINI_API_KEY)
     
     async def generate_headlines(self, news_text: str) -> str:
         """تولید تیتر و لید خبری"""
         prompt = f"""
-شما یک خبرنگار حرفه‌ای هستید. برای متن زیر، دقیقاً 3 جفت تیتر و لید تولید کنید:
+تو یک خبرنگار حرفه‌ای هستی. برای متن زیر، 3 جفت تیتر و لید بنویس:
 
 قوانین:
 - هر تیتر حداکثر 7 کلمه
 - بدون نام افراد در تیتر
-- لید باید خلاصه مهم‌ترین نکات باشد
+- لید کوتاه و جذاب
 
-متن خبری:
-{news_text}
+متن: {news_text}
 
-فرمت خروجی:
+فرمت:
+**تیتر ۱:** [تیتر]
+**لید ۱:** [لید]
 
-**تیتر و لید یک:**
-تیتر: [تیتر اول]
-لید: [لید اول]
+**تیتر ۲:** [تیتر]  
+**لید ۲:** [لید]
 
-**تیتر و لید دو:**
-تیتر: [تیتر دوم]  
-لید: [لید دوم]
-
-**تیتر و لید سه:**
-تیتر: [تیتر سوم]
-لید: [لید سوم]
+**تیتر ۳:** [تیتر]
+**لید ۳:** [لید]
         """
-        
         return await self._call_ai(prompt)
     
     async def generate_video_script(self, topic: str, duration: int = 60, platform: str = "instagram") -> str:
         """تولید اسکریپت ویدیو"""
         prompt = f"""
-برای موضوع "{topic}" اسکریپت ویدیو {duration} ثانیه‌ای برای پلتفرم {platform} بنویس.
+اسکریپت ویدیو {duration} ثانیه‌ای برای {platform} بنویس:
+
+موضوع: {topic}
 
 ساختار:
-- 0-3 ثانیه: قلاب جذاب
-- 3-15 ثانیه: معرفی موضوع
-- 15-45 ثانیه: محتوای اصلی
-- 45-60 ثانیه: جمع‌بندی و CTA
+- ۰-۳ ثانیه: قلاب جذاب
+- ۳-۱۵ ثانیه: معرفی
+- ۱۵-۴۵ ثانیه: محتوا
+- ۴۵-۶۰ ثانیه: نتیجه‌گیری
 
-شامل:
-- متن راوی دقیق
-- توصیف صحنه‌ها
-- پیشنهاد موسیقی
-- نکات فنی
+شامل: متن راوی، توصیف تصاویر، نکات فنی
         """
-        
         return await self._call_ai(prompt)
     
     async def fact_check(self, claim: str) -> str:
-        """راستی‌آزمایی ادعا"""
+        """راستی‌آزمایی"""
         prompt = f"""
-ادعای زیر را راستی‌آزمایی کن:
-
-"{claim}"
+این ادعا را بررسی کن: "{claim}"
 
 گزارش شامل:
-- وضعیت: ✅ درست / ❌ نادرست / ⚠️ مختلط / ❓ نامعلوم
+- وضعیت: ✅ درست / ❌ نادرست / ⚠️ مشکوک / ❓ نامعلوم
 - درجه اطمینان: %
-- دلایل کلیدی
-- منابع احتمالی برای بررسی بیشتر
-- نکته‌های مهم
+- دلیل
+- توصیه برای بررسی بیشتر
 
-به زبان ساده و روان پاسخ بده.
+پاسخ کوتاه و واضح بده.
         """
-        
         return await self._call_ai(prompt)
     
-    async def create_prompt(self, requirements: str, complexity: str = "standard") -> str:
-        """تولید پرامپت سفارشی"""
+    async def create_prompt(self, requirements: str) -> str:
+        """تولید پرامپت"""
         prompt = f"""
-نیازمندی‌ها: {requirements}
-سطح: {complexity}
+نیازمندی: {requirements}
 
-یک پرامپت سیستم حرفه‌ای طراحی کن که شامل:
+یک پرامپت حرفه‌ای بنویس که شامل:
+1. نقش AI
+2. قوانین کلیدی
+3. سبک کار
+4. فرمت خروجی
 
-1. **نقش و هویت**
-2. **قوانین کلیدی**  
-3. **سبک کار**
-4. **فرمت خروجی**
-5. **مثال‌های عملی**
-
-پرامپت باید آماده استفاده و موثر باشد.
+پرامپت باید آماده استفاده باشد.
         """
-        
         return await self._call_ai(prompt)
     
     async def general_ai_chat(self, message: str, context: str = None) -> str:
@@ -112,64 +97,52 @@ class AIService:
             prompt = f"{context}\n\n{message}"
         else:
             prompt = message
-            
         return await self._call_ai(prompt)
     
     async def _call_ai(self, prompt: str) -> str:
-        """تماس با سرویس AI"""
+        """تماس با AI"""
         try:
-            # اولویت با OpenAI
-            if config.OPENAI_API_KEY:
-                return await self._call_openai(prompt)
+            if self.openai_client:
+                return await self._openai_call(prompt)
             elif config.GEMINI_API_KEY:
-                return await self._call_gemini(prompt)
+                return await self._gemini_call(prompt)
             else:
-                return "⚠️ هیچ سرویس AI فعال نیست. لطفاً API Key را در تنظیمات قرار دهید."
-                
+                return "⚠️ هیچ سرویس AI فعال نیست"
         except Exception as e:
-            logger.error(f"خطا در AI service: {e}")
-            return "❌ متأسفانه خطایی رخ داد. لطفاً دوباره تلاش کنید."
+            logger.error(f"AI Error: {e}")
+            return "❌ خطا در AI. دوباره تلاش کنید."
     
-    async def _call_openai(self, prompt: str) -> str:
-        """تماس با OpenAI"""
-        try:
-            # استفاده از روش sync با wrapper
-            def _sync_call():
-                response = openai.ChatCompletion.create(
+    async def _openai_call(self, prompt: str) -> str:
+        """تماس با OpenAI - نسخه جدید"""
+        def sync_call():
+            try:
+                response = self.openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=1500,
                     temperature=0.7
                 )
                 return response.choices[0].message.content
-            
-            # اجرای async
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, _sync_call)
-            return result
-            
-        except Exception as e:
-            logger.error(f"خطا در OpenAI: {e}")
-            # fallback به Gemini
-            if config.GEMINI_API_KEY:
-                return await self._call_gemini(prompt)
-            raise
+            except Exception as e:
+                logger.error(f"OpenAI Error: {e}")
+                raise
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, sync_call)
     
-    async def _call_gemini(self, prompt: str) -> str:
+    async def _gemini_call(self, prompt: str) -> str:
         """تماس با Gemini"""
-        try:
-            def _sync_call():
+        def sync_call():
+            try:
                 model = genai.GenerativeModel('gemini-pro')
                 response = model.generate_content(prompt)
                 return response.text
-            
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, _sync_call)
-            return result
-            
-        except Exception as e:
-            logger.error(f"خطا در Gemini: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Gemini Error: {e}")
+                raise
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, sync_call)
 
-# نمونه سراسری
+# نمونه global
 ai_service = AIService()

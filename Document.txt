@@ -1,0 +1,230 @@
+# نرم‌افزارهای پیش‌نیاز سیستم
+
+## 🐍 Python
+```bash
+# Python 3.9 یا بالاتر
+python --version  # باید 3.9+ باشد
+```
+
+## 🎬 FFmpeg (برای پردازش ویدیو/صوت)
+
+### Windows:
+```powershell
+# با Chocolatey
+choco install ffmpeg
+
+# یا دانلود مستقیم از:
+# https://ffmpeg.org/download.html#build-windows
+```
+
+### macOS:
+```bash
+# با Homebrew
+brew install ffmpeg
+```
+
+### Ubuntu/Debian:
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+### CentOS/RHEL:
+```bash
+sudo yum install epel-release
+sudo yum install ffmpeg
+```
+
+## 🔊 System Audio Libraries
+
+### Ubuntu/Debian:
+```bash
+sudo apt install \
+    portaudio19-dev \
+    python3-pyaudio \
+    libasound2-dev \
+    libsndfile1-dev \
+    libavcodec-extra \
+    libavformat-dev \
+    libavdevice-dev
+```
+
+### CentOS/RHEL:
+```bash
+sudo yum install \
+    portaudio-devel \
+    alsa-lib-devel \
+    libsndfile-devel \
+    ffmpeg-devel
+```
+
+### macOS:
+```bash
+brew install portaudio
+brew install libsndfile
+```
+
+## 🖼️ Image Processing Libraries
+
+### Ubuntu/Debian:
+```bash
+sudo apt install \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libopencv-dev \
+    python3-opencv
+```
+
+### macOS:
+```bash
+brew install jpeg libpng libtiff opencv
+```
+
+## 🗃️ Database (اختیاری - برای PostgreSQL)
+
+### Ubuntu/Debian:
+```bash
+sudo apt install postgresql postgresql-contrib
+```
+
+### macOS:
+```bash
+brew install postgresql
+brew services start postgresql
+```
+
+## 🐳 Docker (اختیاری - برای containerization)
+
+### Ubuntu:
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+```
+
+### macOS/Windows:
+دانلود Docker Desktop از: https://www.docker.com/products/docker-desktop
+
+## 🔧 Git (برای version control)
+```bash
+# Ubuntu/Debian
+sudo apt install git
+
+# macOS
+brew install git
+
+# Windows
+# دانلود از: https://git-scm.com/download/win
+```
+
+## ⚡ Redis (برای caching - اختیاری)
+
+### Ubuntu/Debian:
+```bash
+sudo apt install redis-server
+sudo systemctl start redis-server
+```
+
+### macOS:
+```bash
+brew install redis
+brew services start redis
+```
+
+## 🛠️ Build Tools
+
+### Ubuntu/Debian:
+```bash
+sudo apt install \
+    build-essential \
+    python3-dev \
+    pkg-config \
+    cmake
+```
+
+### macOS:
+```bash
+xcode-select --install
+brew install cmake pkg-config
+```
+
+### Windows:
+- Visual Studio Build Tools
+- یا Visual Studio Community
+
+## 📋 بررسی نصب
+
+پس از نصب، این دستورات را اجرا کنید:
+
+```bash
+# Python
+python --version
+
+# FFmpeg
+ffmpeg -version
+
+# Git
+git --version
+
+# Redis (اگر نصب شده)
+redis-cli ping
+
+# OpenCV (بعد از نصب requirements)
+python -c "import cv2; print(cv2.__version__)"
+```
+
+## 🚀 نصب Requirements
+
+```bash
+# ایجاد virtual environment
+python -m venv venv
+
+# فعال‌سازی
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# نصب requirements
+pip install -r requirements.txt
+
+# نصب مدل spaCy برای فارسی (اختیاری)
+python -m spacy download en_core_web_sm
+```
+
+## ⚠️ نکات مهم
+
+1. **حافظه RAM**: حداقل 4GB توصیه می‌شود
+2. **فضای دیسک**: حداقل 2GB برای کتابخانه‌ها
+3. **اتصال اینترنت**: برای دانلود مدل‌های AI
+4. **PyTorch**: اگر از GPU استفاده می‌کنید:
+   ```bash
+   # CUDA version
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+   
+   # CPU-only version
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+   ```
+
+## 🔍 رفع مشکلات رایج
+
+### خطای audio processing:
+```bash
+# Ubuntu
+sudo apt install python3-pyaudio
+
+# macOS  
+brew install portaudio
+pip install pyaudio
+```
+
+### خطای OpenCV:
+```bash
+pip uninstall opencv-python
+pip install opencv-python-headless
+```
+
+### خطای FFmpeg:
+- مطمئن شوید FFmpeg در PATH سیستم است
+- دستور `ffmpeg -version` را تست کنید

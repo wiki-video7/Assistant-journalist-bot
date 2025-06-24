@@ -1,0 +1,28 @@
+# docker-compose.yml - Assistant Journalist Bot
+
+version: '3.8'
+
+services:
+  journalist-bot:
+    build: .
+    container_name: assistant-journalist-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./cache:/app/cache
+    environment:
+      - TZ=Asia/Tehran
+    
+  # اختیاری - Redis برای caching
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: bot-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   redis_data:

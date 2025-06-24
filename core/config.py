@@ -1,66 +1,55 @@
-# config.py - تنظیمات ربات
-from dotenv import load_dotenv
-load_dotenv()  
+# core/config.py - ساده‌شده
 
 import os
-from dataclasses import dataclass
-from typing import Optional
+from dotenv import load_dotenv
 
-@dataclass
+# بارگذاری متغیرهای محیطی
+load_dotenv()
+
 class Config:
-   """کلاس تنظیمات ربات"""
-   
-   # تنظیمات ربات تلگرام
-   BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
-   BOT_USERNAME: str = os.getenv("BOT_USERNAME", "assistant_journalist_bot")
-   
-   # تنظیمات AI
-   OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-   GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-   
-   # تنظیمات دیتابیس
-   DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///bot.db")
-   
-   # تنظیمات فایل
-   MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
-   UPLOAD_DIR: str = "uploads/"
-   CACHE_DIR: str = "cache/"
-   
-   # محدودیت‌های کاربری
-   FREE_DAILY_LIMIT: int = 10
-   PRO_DAILY_LIMIT: int = 100
-   MAX_TEXT_LENGTH: int = 4000
-   
-   # تنظیمات Whisper
-   WHISPER_MODEL: str = "base"
-   
-   # Admin users
-   ADMIN_IDS: list = [123456789]  # لیست آیدی ادمین‌ها
-   
-   # URLs
-   NEWS_API_URL: str = "https://newsapi.org/v2/"
-   NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "")
-   
-   def __post_init__(self):
-       """بررسی تنظیمات ضروری"""
-       if not self.BOT_TOKEN:
-           raise ValueError("BOT_TOKEN الزامی است!")
-           
-       # ایجاد پوشه‌های ضروری
-       os.makedirs(self.UPLOAD_DIR, exist_ok=True)
-       os.makedirs(self.CACHE_DIR, exist_ok=True)
-       
-   def is_admin(self, user_id: int) -> bool:
-       """بررسی ادمین بودن کاربر"""
-       return user_id in self.ADMIN_IDS
-       
-   def get_ai_model(self, service: str = "openai") -> Optional[str]:
-       """انتخاب مدل AI"""
-       models = {
-           "openai": "gpt-3.5-turbo",
-           "gemini": "gemini-pro"
-       }
-       return models.get(service)
+    """تنظیمات ربات - ساده‌شده"""
+    
+    # تنظیمات اصلی (اجباری)
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+    BOT_USERNAME = os.getenv("BOT_USERNAME", "assistant_journalist_bot")
+    
+    # کلیدهای AI
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
+    
+    # تنظیمات فایل
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+    UPLOAD_DIR = "uploads"
+    CACHE_DIR = "cache"
+    LOGS_DIR = "logs"
+    
+    # محدودیت‌ها
+    FREE_DAILY_LIMIT = 10
+    PRO_DAILY_LIMIT = 100
+    MAX_TEXT_LENGTH = 4000
+    
+    # ادمین‌ها (اختیاری)
+    ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
+    
+    @classmethod
+    def validate(cls):
+        """بررسی تنظیمات ضروری"""
+        if not cls.BOT_TOKEN:
+            raise ValueError("❌ BOT_TOKEN در فایل .env موجود نیست!")
+        
+        if not cls.OPENAI_API_KEY and not cls.GEMINI_API_KEY:
+            print("⚠️  هیچ کلید AI تنظیم نشده - برخی ویژگی‌ها کار نخواهند کرد")
+        
+        # ایجاد پوشه‌ها
+        for directory in [cls.UPLOAD_DIR, cls.CACHE_DIR, cls.LOGS_DIR]:
+            os.makedirs(directory, exist_ok=True)
+    
+    @classmethod
+    def is_admin(cls, user_id: int) -> bool:
+        """بررسی ادمین بودن"""
+        return user_id in cls.ADMIN_IDS
 
-# نمونه instance برای استفاده
+# بررسی تنظیمات در هنگام import
 config = Config()
+config.validate()

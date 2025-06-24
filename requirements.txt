@@ -1,84 +1,30 @@
-# Assistant Journalist Bot Requirements
+# Assistant Journalist Bot - Optimized Requirements
 
-# Core Bot Framework
-python-telegram-bot==20.7
-python-dotenv==1.0.0
+# Core Framework (Required)
+python-telegram-bot==21.0.1
+python-dotenv==1.0.1
 
-# AI Services
-openai==1.12.0
-google-generativeai==0.3.2
+# AI Services (Required)
+openai==1.51.2
+google-generativeai==0.8.3
 
-# Database
-sqlalchemy==2.0.25
-alembic==1.13.1
-sqlite==3.41.2
+# Basic Processing (Required)
+requests==2.32.3
+aiofiles==24.1.0
 
-# Web Scraping & News APIs
-requests==2.31.0
-beautifulsoup4==4.12.2
-feedparser==6.0.10
-newspaper3k==0.2.8
+# Optional Features (Uncomment if needed)
+# Audio Processing
+# openai-whisper==20231117
+# pydub==0.25.1
 
-# Audio Processing (Whisper)
-openai-whisper==20231117
-librosa==0.10.1
-soundfile==0.12.1
-pydub==0.25.1
+# Video Processing  
+# moviepy==1.0.3
+# opencv-python-headless==4.10.0.84
 
-# Video Processing
-moviepy==1.0.3
-opencv-python==4.8.1.78
-imageio==2.33.1
-imageio-ffmpeg==0.4.9
-
-# Image Processing
-Pillow==10.2.0
-opencv-python-headless==4.8.1.78
-
-# Text Processing & NLP
-nltk==3.8.1
-spacy==3.7.2
-textstat==0.7.3
-langdetect==1.0.9
-
-# Data Processing
-pandas==2.1.4
-numpy==1.26.3
-python-dateutil==2.8.2
-
-# File Processing
-python-docx==1.1.0
-PyPDF2==3.0.1
-openpyxl==3.1.2
-
-# HTTP & API
-aiohttp==3.9.1
-httpx==0.26.0
-fastapi==0.108.0
-uvicorn==0.25.0
-
-# Async & Performance
-asyncio==3.4.3
-aiofiles==23.2.1
-redis==5.0.1
-
-# Security & Validation
-cryptography==41.0.8
-validators==0.22.0
-python-multipart==0.0.6
-
-# Logging & Monitoring
-loguru==0.7.2
-prometheus-client==0.19.0
-
-# Utilities
-python-slugify==8.0.1
-pytz==2023.3
-tqdm==4.66.1
-colorama==0.4.6
+# Document Processing
+# python-docx==1.1.2
+# PyPDF2==3.0.1
 
 # Development Tools (Optional)
-pytest==7.4.3
-pytest-asyncio==0.23.2
-black==23.12.1
-flake8==7.0.0
+# pytest==8.3.3
+# black==24.8.0

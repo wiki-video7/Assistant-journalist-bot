@@ -172,4 +172,99 @@ def main():
     # بررسی پیش‌نیازها
     if not check_requirements():
         print("\n❌ لطفاً ابتدا پیش‌نیازها را برآورده کنید")
-        sys.
+        sys.exit(1)
+    
+    # تنظیم logging
+    setup_logging()
+    logger = logging.getLogger(__name__)
+    
+    # نمایش اطلاعات
+    display_info()
+    
+    try:
+        # بررسی‌های شروع
+        if not asyncio.run(startup_checks()):
+            print("\n❌ بررسی‌های شروع ناموفق")
+            sys.exit(1)
+        
+        print("\n🚀 شروع ربات...")
+        logger.info("شروع ربات Assistant Journalist Bot")
+        
+        # ایجاد و اجرای ربات
+        bot = JournalistBot()
+        bot.run()
+        
+    except KeyboardInterrupt:
+        print("\n\n⏹️  ربات توسط کاربر متوقف شد")
+        logger.info("ربات توسط کاربر متوقف شد (Ctrl+C)")
+        
+    except Exception as e:
+        print(f"\n❌ خطای غیرمنتظره: {e}")
+        logger.error(f"خطای غیرمنتظره در اجرای ربات: {e}", exc_info=True)
+        sys.exit(1)
+        
+    finally:
+        print("\n👋 خداحافظ!")
+        logger.info("ربات به طور کامل متوقف شد")
+
+def health_check():
+    """بررسی سلامت سیستم"""
+    print("🔍 بررسی سلامت سیستم...")
+    
+    checks = {
+        "Python Version": sys.version_info >= (3, 9),
+        "Config File": hasattr(config, 'BOT_TOKEN') and config.BOT_TOKEN,
+        "Project Structure": all([
+            (PROJECT_ROOT / "core").exists(),
+            (PROJECT_ROOT / "handlers").exists(),
+            (PROJECT_ROOT / "services").exists(),
+            (PROJECT_ROOT / "utils").exists()
+        ])
+    }
+    
+    all_passed = True
+    for check_name, passed in checks.items():
+        status = "✅" if passed else "❌"
+        print(f"   {status} {check_name}")
+        if not passed:
+            all_passed = False
+    
+    return all_passed
+
+if __name__ == "__main__":
+    # بررسی آرگومان‌های خط فرمان
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--health":
+            success = health_check()
+            sys.exit(0 if success else 1)
+        elif sys.argv[1] == "--version":
+            print("Assistant Journalist Bot v1.0.0")
+            print("Powered by Advanced AI Systems")
+            sys.exit(0)
+        elif sys.argv[1] == "--help":
+            print("""
+Assistant Journalist Bot - دستیار هوشمند خبرنگار
+
+استفاده:
+    python main.py              # اجرای عادی ربات
+    python main.py --health     # بررسی سلامت سیستم
+    python main.py --version    # نمایش نسخه
+    python main.py --help       # نمایش این راهنما
+
+ویژگی‌ها:
+    📰 تولید تیتر و لید خبری
+    ✅ راستی‌آزمایی اطلاعات
+    🎬 تولید اسکریپت ویدیو
+    🤖 مهندسی پرامپت
+    💬 طراحی چت‌بات
+    
+برای اطلاعات بیشتر به README.md مراجعه کنید.
+            """)
+            sys.exit(0)
+        else:
+            print(f"❌ آرگومان نامعتبر: {sys.argv[1]}")
+            print("برای مشاهده راهنما: python main.py --help")
+            sys.exit(1)
+    
+    # اجرای عادی
+    main()

@@ -213,3 +213,15 @@ class NewsHandler:
             await self._edit_error(processing_msg)
     
     async def _send_error(self, query):
+        """ارسال پیام خطا"""
+        await query.edit_message_text(
+            "❌ خطایی رخ داد. لطفاً دوباره تلاش کنید.",
+            reply_markup=MainKeyboard.get_main_menu()
+        )
+    
+    async def _edit_error(self, message):
+        """ویرایش پیام با خطا"""
+        await message.edit_text(
+            "❌ متأسفانه خطایی رخ داد. لطفاً دوباره تلاش کنید.",
+            reply_markup=MainKeyboard.get_main_menu()
+        )

@@ -1,0 +1,1166 @@
+# Assistant Journalist Bot - Windows Auto Installer
+# نصب خودکار ربات دستیار خبرنگار در ویندوز
+# نسخه: 1.0.0
+# تاریخ: 2025
+
+param(
+    [string]$InstallPath = "$env:USERPROFILE\AssistantJournalistBot",
+    [string]$GitRepo = "https://github.com/your-username/assistant-journalist-bot.git",
+    [switch]$SkipChocolatey,
+    [switch]$SkipPython,
+    [switch]$SkipGit,
+    [switch]$SkipFFmpeg,
+    [switch]$Silent,
+    [switch]$Help
+)
+
+# رنگ‌ها برای خروجی
+$Colors = @{
+    Red = "Red"
+    Green = "Green"
+    Yellow = "Yellow"
+    Blue = "Blue"
+    Cyan = "Cyan"
+    Magenta = "Magenta"
+    White = "White"
+}
+
+# متغیرهای سراسری
+$Script:ErrorCount = 0
+$Script:WarningCount = 0
+$Script:LogFile = "$env:TEMP\assistant-bot-install.log"
+$Script:StartTime = Get-Date
+
+# ====================================================================
+# توابع کمکی
+# ====================================================================
+
+function Write-ColoredOutput {
+    param(
+        [string]$Message,
+        [string]$Color = "White",
+        [string]$Level = "INFO"
+    )
+    
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $logMessage = "[$timestamp] [$Level] $Message"
+    
+    # نوشتن در کنسول
+    if (-not $Silent) {
+        Write-Host "[$timestamp] " -NoNewline -ForegroundColor Gray
+        Write-Host $Message -ForegroundColor $Color
+    }
+    
+    # نوشتن در لاگ
+    Add-Content -Path $Script:LogFile -Value $logMessage
+}
+
+function Write-Success {
+    param([string]$Message)
+    Write-ColoredOutput "✅ $Message" -Color $Colors.Green -Level "SUCCESS"
+}
+
+function Write-Error {
+    param([string]$Message)
+    Write-ColoredOutput "❌ $Message" -Color $Colors.Red -Level "ERROR"
+    $Script:ErrorCount++
+}
+
+function Write-Warning {
+    param([string]$Message)
+    Write-ColoredOutput "⚠️  $Message" -Color $Colors.Yellow -Level "WARNING"
+    $Script:WarningCount++
+}
+
+function Write-Info {
+    param([string]$Message)
+    Write-ColoredOutput "ℹ️  $Message" -Color $Colors.Cyan -Level "INFO"
+}
+
+function Write-Step {
+    param([string]$Message)
+    Write-ColoredOutput "🔄 $Message" -Color $Colors.Blue -Level "STEP"
+}
+
+function Show-Banner {
+    if ($Silent) { return }
+    
+    $banner = @"
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║    🤖 Assistant Journalist Bot - Windows Installer          ║
+║                                                              ║
+║         نصب خودکار ربات دستیار خبرنگار در ویندوز            ║
+║                                                              ║
+║    📋 این اسکریپت به طور خودکار نصب می‌کند:                  ║
+║       • Python 3.11                                         ║
+║       • Git                                                  ║
+║       • FFmpeg                                               ║
+║       • کتابخانه‌های مورد نیاز                                ║
+║       • ربات دستیار خبرنگار                                  ║
+║                                                              ║
+║    ⚠️  این اسکریپت نیاز به دسترسی مدیریت دارد               ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+"@
+    
+    Write-Host $banner -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Show-Help {
+    $helpText = @"
+Assistant Journalist Bot - Windows Auto Installer
+
+استفاده:
+    .\install.ps1 [پارامترها]
+
+پارامترها:
+    -InstallPath <path>     مسیر نصب (پیش‌فرض: %USERPROFILE%\AssistantJournalistBot)
+    -GitRepo <url>          آدرس مخزن Git
+    -SkipChocolatey        عدم نصب Chocolatey
+    -SkipPython            عدم نصب Python
+    -SkipGit               عدم نصب Git
+    -SkipFFmpeg            عدم نصب FFmpeg
+    -Silent                حالت ساکت (بدون نمایش پیام‌ها)
+    -Help                  نمایش این راهنما
+
+مثال‌ها:
+    .\install.ps1
+    .\install.ps1 -InstallPath "C:\MyBots\JournalistBot"
+    .\install.ps1 -SkipChocolatey -Silent
+    .\install.ps1 -Help
+
+نکته: برای اجرای این اسکریپت، PowerShell را با دسترسی مدیریت اجرا کنید.
+"@
+    
+    Write-Host $helpText -ForegroundColor White
+    exit 0
+}
+
+function Test-AdminRights {
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Test-InternetConnection {
+    try {
+        $null = Test-NetConnection -ComputerName "google.com" -Port 80 -InformationLevel Quiet -WarningAction SilentlyContinue
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Install-Chocolatey {
+    if ($SkipChocolatey) {
+        Write-Info "نصب Chocolatey رد شد"
+        return $true
+    }
+    
+    Write-Step "بررسی نصب Chocolatey..."
+    
+    if (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Success "Chocolatey قبلاً نصب شده است"
+        return $true
+    }
+    
+    Write-Step "نصب Chocolatey..."
+    
+    try {
+        # تنظیم سیاست اجرا
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        
+        # دانلود و نصب Chocolatey
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        $installScript = (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')
+        Invoke-Expression $installScript
+        
+        # بررسی نصب
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            Write-Success "Chocolatey با موفقیت نصب شد"
+            
+            # به‌روزرسانی PATH
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            
+            return $true
+        }
+        else {
+            Write-Error "نصب Chocolatey با شکست مواجه شد"
+            return $false
+        }
+    }
+    catch {
+        Write-Error "خطا در نصب Chocolatey: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Install-Python {
+    if ($SkipPython) {
+        Write-Info "نصب Python رد شد"
+        return $true
+    }
+    
+    Write-Step "بررسی نصب Python..."
+    
+    # بررسی Python موجود
+    try {
+        $pythonVersion = python --version 2>&1
+        if ($pythonVersion -match "Python 3\.([9-9]|1[0-9])") {
+            Write-Success "Python $pythonVersion قبلاً نصب شده است"
+            return $true
+        }
+        elseif ($pythonVersion -match "Python") {
+            Write-Warning "نسخه Python شما ($pythonVersion) قدیمی است. نسخه 3.9+ مورد نیاز است"
+        }
+    }
+    catch {
+        Write-Info "Python نصب نشده است"
+    }
+    
+    Write-Step "نصب Python 3.11..."
+    
+    try {
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            # نصب با Chocolatey
+            $chocoResult = choco install python --version=3.11.7 -y
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Python 3.11 با موفقیت نصب شد"
+            }
+            else {
+                Write-Warning "نصب Python با Chocolatey ناموفق بود، تلاش برای نصب دستی..."
+                return Install-PythonManual
+            }
+        }
+        else {
+            return Install-PythonManual
+        }
+        
+        # به‌روزرسانی PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        
+        # تست نصب
+        Start-Sleep 3
+        $pythonVersion = python --version 2>&1
+        if ($pythonVersion -match "Python 3\.1[0-9]") {
+            Write-Success "Python نصب و تست شد: $pythonVersion"
+            return $true
+        }
+        else {
+            Write-Error "تست Python ناموفق: $pythonVersion"
+            return $false
+        }
+    }
+    catch {
+        Write-Error "خطا در نصب Python: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Install-PythonManual {
+    Write-Step "دانلود و نصب دستی Python..."
+    
+    try {
+        $pythonUrl = "https://www.python.org/ftp/python/3.11.7/python-3.11.7-amd64.exe"
+        $pythonInstaller = "$env:TEMP\python-3.11.7-amd64.exe"
+        
+        Write-Info "دانلود Python از $pythonUrl"
+        Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonInstaller -UseBasicParsing
+        
+        Write-Info "نصب Python..."
+        $installArgs = @(
+            "/quiet",
+            "InstallAllUsers=1",
+            "PrependPath=1",
+            "Include_test=0",
+            "Include_doc=0",
+            "Include_dev=0",
+            "Include_debug=0",
+            "Include_launcher=1",
+            "InstallLauncherAllUsers=1"
+        )
+        
+        Start-Process -FilePath $pythonInstaller -ArgumentList $installArgs -Wait
+        
+        # پاک کردن فایل نصب
+        Remove-Item $pythonInstaller -Force
+        
+        Write-Success "Python با موفقیت نصب شد"
+        return $true
+    }
+    catch {
+        Write-Error "خطا در نصب دستی Python: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Install-Git {
+    if ($SkipGit) {
+        Write-Info "نصب Git رد شد"
+        return $true
+    }
+    
+    Write-Step "بررسی نصب Git..."
+    
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        $gitVersion = git --version
+        Write-Success "Git قبلاً نصب شده است: $gitVersion"
+        return $true
+    }
+    
+    Write-Step "نصب Git..."
+    
+    try {
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            choco install git -y
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Git با موفقیت نصب شد"
+            }
+            else {
+                Write-Error "نصب Git ناموفق بود"
+                return $false
+            }
+        }
+        else {
+            Write-Warning "Chocolatey در دسترس نیست. لطفاً Git را از https://git-scm.com دانلود کنید"
+            return $false
+        }
+        
+        # به‌روزرسانی PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        
+        # تست نصب
+        Start-Sleep 2
+        if (Get-Command git -ErrorAction SilentlyContinue) {
+            $gitVersion = git --version
+            Write-Success "Git نصب و تست شد: $gitVersion"
+            return $true
+        }
+        else {
+            Write-Error "تست Git ناموفق"
+            return $false
+        }
+    }
+    catch {
+        Write-Error "خطا در نصب Git: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Install-FFmpeg {
+    if ($SkipFFmpeg) {
+        Write-Info "نصب FFmpeg رد شد"
+        return $true
+    }
+    
+    Write-Step "بررسی نصب FFmpeg..."
+    
+    if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+        $ffmpegVersion = ffmpeg -version 2>&1 | Select-String "ffmpeg version" | Select-Object -First 1
+        Write-Success "FFmpeg قبلاً نصب شده است: $ffmpegVersion"
+        return $true
+    }
+    
+    Write-Step "نصب FFmpeg..."
+    
+    try {
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            choco install ffmpeg -y
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "FFmpeg با موفقیت نصب شد"
+            }
+            else {
+                Write-Error "نصب FFmpeg ناموفق بود"
+                return $false
+            }
+        }
+        else {
+            Write-Warning "Chocolatey در دسترس نیست. FFmpeg باید دستی نصب شود"
+            return Install-FFmpegManual
+        }
+        
+        # به‌روزرسانی PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        
+        # تست نصب
+        Start-Sleep 2
+        if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+            Write-Success "FFmpeg نصب و تست شد"
+            return $true
+        }
+        else {
+            Write-Error "تست FFmpeg ناموفق"
+            return $false
+        }
+    }
+    catch {
+        Write-Error "خطا در نصب FFmpeg: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Install-FFmpegManual {
+    Write-Step "نصب دستی FFmpeg..."
+    
+    try {
+        $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+        $ffmpegZip = "$env:TEMP\ffmpeg.zip"
+        $ffmpegExtractPath = "$env:TEMP\ffmpeg"
+        $ffmpegInstallPath = "$env:ProgramFiles\FFmpeg"
+        
+        Write-Info "دانلود FFmpeg..."
+        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip -UseBasicParsing
+        
+        Write-Info "استخراج FFmpeg..."
+        Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegExtractPath -Force
+        
+        # پیدا کردن پوشه استخراج شده
+        $extractedFolder = Get-ChildItem -Path $ffmpegExtractPath -Directory | Select-Object -First 1
+        
+        # کپی کردن فایل‌ها
+        if (Test-Path $ffmpegInstallPath) {
+            Remove-Item $ffmpegInstallPath -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $ffmpegInstallPath -Force
+        Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination $ffmpegInstallPath -Recurse -Force
+        
+        # اضافه کردن به PATH
+        $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        $ffmpegBinPath = "$ffmpegInstallPath\bin"
+        
+        if ($currentPath -notlike "*$ffmpegBinPath*") {
+            $newPath = "$currentPath;$ffmpegBinPath"
+            [System.Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+            $env:Path = "$env:Path;$ffmpegBinPath"
+        }
+        
+        # پاک کردن فایل‌های موقت
+        Remove-Item $ffmpegZip -Force
+        Remove-Item $ffmpegExtractPath -Recurse -Force
+        
+        Write-Success "FFmpeg با موفقیت نصب شد"
+        return $true
+    }
+    catch {
+        Write-Error "خطا در نصب دستی FFmpeg: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Download-BotSource {
+    Write-Step "دانلود کد منبع ربات..."
+    
+    try {
+        # ایجاد مسیر نصب
+        if (Test-Path $InstallPath) {
+            Write-Warning "مسیر نصب وجود دارد. حذف محتویات قبلی..."
+            Remove-Item "$InstallPath\*" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        else {
+            New-Item -ItemType Directory -Path $InstallPath -Force
+        }
+        
+        # کلون کردن مخزن
+        Set-Location $InstallPath
+        git clone $GitRepo .
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "کد منبع با موفقیت دانلود شد"
+            return $true
+        }
+        else {
+            Write-Error "خطا در دانلود کد منبع"
+            return $false
+        }
+    }
+    catch {
+        Write-Error "خطا در دانلود کد منبع: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Setup-PythonEnvironment {
+    Write-Step "راه‌اندازی محیط Python..."
+    
+    try {
+        Set-Location $InstallPath
+        
+        # ایجاد محیط مجازی
+        Write-Info "ایجاد محیط مجازی Python..."
+        python -m venv venv
+        
+        if (-not (Test-Path "venv\Scripts\activate.bat")) {
+            Write-Error "ایجاد محیط مجازی ناموفق"
+            return $false
+        }
+        
+        # فعال‌سازی محیط مجازی و نصب کتابخانه‌ها
+        Write-Info "نصب کتابخانه‌های Python..."
+        
+        # به‌روزرسانی pip
+        & "venv\Scripts\python.exe" -m pip install --upgrade pip
+        
+        # نصب requirements
+        if (Test-Path "requirements.txt") {
+            & "venv\Scripts\python.exe" -m pip install -r requirements.txt
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "کتابخانه‌های Python با موفقیت نصب شدند"
+            }
+            else {
+                Write-Error "خطا در نصب کتابخانه‌های Python"
+                return $false
+            }
+        }
+        else {
+            Write-Warning "فایل requirements.txt یافت نشد"
+            
+            # نصب کتابخانه‌های اصلی
+            $packages = @(
+                "python-telegram-bot==21.0.1",
+                "python-dotenv==1.0.1",
+                "openai==1.51.2",
+                "google-generativeai==0.8.3",
+                "requests==2.32.3",
+                "aiofiles==24.1.0"
+            )
+            
+            foreach ($package in $packages) {
+                Write-Info "نصب $package..."
+                & "venv\Scripts\python.exe" -m pip install $package
+            }
+        }
+        
+        return $true
+    }
+    catch {
+        Write-Error "خطا در راه‌اندازی محیط Python: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Create-ConfigFile {
+    Write-Step "ایجاد فایل تنظیمات..."
+    
+    try {
+        Set-Location $InstallPath
+        
+        # کپی کردن فایل نمونه
+        if (Test-Path ".env.example") {
+            Copy-Item ".env.example" ".env"
+            Write-Success "فایل .env از نمونه کپی شد"
+        }
+        else {
+            # ایجاد فایل .env پایه
+            $envContent = @"
+# Assistant Journalist Bot Configuration
+# کپی این فایل به .env و مقادیر واقعی را قرار دهید
+
+# Bot Configuration (Required)
+BOT_TOKEN=your_telegram_bot_token_here
+BOT_USERNAME=your_bot_username
+
+# AI Services (At least one required)
+OPENAI_API_KEY=sk-proj-your_openai_key_here
+GEMINI_API_KEY=your_gemini_key_here
+
+# Optional APIs
+NEWS_API_KEY=your_news_api_key
+
+# Admin Users (Optional - comma separated user IDs)
+ADMIN_IDS=123456789,987654321
+
+# Database (Optional)
+DATABASE_URL=sqlite:///bot.db
+
+# Advanced Settings
+MAX_REQUESTS_PER_MINUTE=30
+FREE_DAILY_LIMIT=50
+CACHE_TTL_HOURS=12
+LOG_LEVEL=INFO
+"@
+            
+            Set-Content -Path ".env" -Value $envContent -Encoding UTF8
+            Write-Success "فایل .env پایه ایجاد شد"
+        }
+        
+        # ایجاد پوشه‌های ضروری
+        $directories = @("logs", "uploads", "cache", "data")
+        foreach ($dir in $directories) {
+            if (-not (Test-Path $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                Write-Info "پوشه $dir ایجاد شد"
+            }
+        }
+        
+        return $true
+    }
+    catch {
+        Write-Error "خطا در ایجاد فایل تنظیمات: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Test-BotInstallation {
+    Write-Step "تست نصب ربات..."
+    
+    try {
+        Set-Location $InstallPath
+        
+        # تست سلامت
+        $healthCheck = & "venv\Scripts\python.exe" main.py --version 2>&1
+        
+        if ($healthCheck -match "Assistant Journalist Bot") {
+            Write-Success "ربات با موفقیت نصب شد: $healthCheck"
+            return $true
+        }
+        else {
+            Write-Error "تست ربات ناموفق: $healthCheck"
+            return $false
+        }
+    }
+    catch {
+        Write-Error "خطا در تست نصب: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Create-StartupScripts {
+    Write-Step "ایجاد اسکریپت‌های راه‌اندازی..."
+    
+    try {
+        Set-Location $InstallPath
+        
+        # اسکریپت PowerShell
+        $psScript = @"
+# Assistant Journalist Bot Startup Script
+# راه‌اندازی ربات دستیار خبرنگار
+
+`$BotPath = Split-Path -Parent `$MyInvocation.MyCommand.Definition
+Set-Location `$BotPath
+
+Write-Host "🤖 راه‌اندازی Assistant Journalist Bot..." -ForegroundColor Cyan
+Write-Host "📁 مسیر: `$BotPath" -ForegroundColor Gray
+
+# بررسی فایل تنظیمات
+if (-not (Test-Path ".env")) {
+    Write-Host "❌ فایل .env یافت نشد!" -ForegroundColor Red
+    Write-Host "لطفاً ابتدا فایل .env را تنظیم کنید." -ForegroundColor Yellow
+    pause
+    exit 1
+}
+
+# اجرای ربات
+try {
+    & "venv\Scripts\python.exe" main.py
+}
+catch {
+    Write-Host "❌ خطا در اجرای ربات: `$(`$_.Exception.Message)" -ForegroundColor Red
+    pause
+    exit 1
+}
+"@
+        
+        Set-Content -Path "start-bot.ps1" -Value $psScript -Encoding UTF8
+        
+        # اسکریپت Batch
+        $batScript = @"
+@echo off
+cd /d "%~dp0"
+
+echo 🤖 راه‌اندازی Assistant Journalist Bot...
+echo 📁 مسیر: %CD%
+
+if not exist ".env" (
+    echo ❌ فایل .env یافت نشد!
+    echo لطفاً ابتدا فایل .env را تنظیم کنید.
+    pause
+    exit /b 1
+)
+
+venv\Scripts\python.exe main.py
+if errorlevel 1 (
+    echo ❌ خطا در اجرای ربات
+    pause
+    exit /b 1
+)
+"@
+        
+        Set-Content -Path "start-bot.bat" -Value $batScript -Encoding UTF8
+        
+        # اسکریپت تست سلامت
+        $healthScript = @"
+@echo off
+cd /d "%~dp0"
+
+echo 🔍 بررسی سلامت ربات...
+venv\Scripts\python.exe main.py --health
+
+echo.
+echo ✅ تست کامل شد
+pause
+"@
+        
+        Set-Content -Path "health-check.bat" -Value $healthScript -Encoding UTF8
+        
+        Write-Success "اسکریپت‌های راه‌اندازی ایجاد شدند"
+        return $true
+    }
+    catch {
+        Write-Error "خطا در ایجاد اسکریپت‌ها: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Create-DesktopShortcut {
+    Write-Step "ایجاد میانبر دسکتاپ..."
+    
+    try {
+        $WshShell = New-Object -comObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\Assistant Journalist Bot.lnk")
+        $Shortcut.TargetPath = "$InstallPath\start-bot.bat"
+        $Shortcut.WorkingDirectory = $InstallPath
+        $Shortcut.Description = "ربات دستیار خبرنگار"
+        $Shortcut.IconLocation = "$InstallPath\icon.ico"
+        $Shortcut.Save()
+        
+        Write-Success "میانبر دسکتاپ ایجاد شد"
+        return $true
+    }
+    catch {
+        Write-Warning "خطا در ایجاد میانبر دسکتاپ: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Show-PostInstallInstructions {
+    if ($Silent) { return }
+    
+    $instructions = @"
+
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║    🎉 نصب با موفقیت انجام شد!                               ║
+║                                                              ║
+║    📁 مسیر نصب: $InstallPath
+║                                                              ║
+║    📋 مراحل بعدی:                                           ║
+║                                                              ║
+║    1️⃣  فایل .env را ویرایش کنید:                           ║
+║       • BOT_TOKEN را از @BotFather دریافت کنید             ║
+║       • OPENAI_API_KEY یا GEMINI_API_KEY تنظیم کنید         ║
+║                                                              ║
+║    2️⃣  برای اجرای ربات:                                    ║
+║       • دابل کلیک روی "start-bot.bat"                      ║
+║       • یا PowerShell: .\start-bot.ps1                      ║
+║                                                              ║
+║    3️⃣  برای تست سلامت:                                     ║
+║       • دابل کلیک روی "health-check.bat"                   ║
+║                                                              ║
+║    🔗 لینک‌های مفید:                                        ║
+║       • راهنمای کامل: README.md                            ║
+║       • تلگرام: @BotFather                                  ║
+║       • OpenAI: https://platform.openai.com                 ║
+║       • Gemini: https://ai.google.dev                       ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+"@
+    
+    Write-Host $instructions -ForegroundColor Green
+}
+
+function Show-InstallSummary {
+    $endTime = Get-Date
+    $duration = $endTime - $Script:StartTime
+    
+    if ($Silent) { return }
+    
+    $summary = @"
+
+╔══════════════════════════════════════════════════════════════╗
+║                    📊 خلاصه نصب                              ║
+╠══════════════════════════════════════════════════════════════╣
+║  ⏱️  زمان نصب: $($duration.ToString("mm\:ss"))                                          ║
+║  ✅ موفقیت‌ها: $($Script:ErrorCount -eq 0 ? 'همه مراحل' : 'با خطا')                              ║
+║  ❌ خطاها: $Script:ErrorCount                                              ║
+║  ⚠️  هشدارها: $Script:WarningCount                                           ║
+║                                                              ║
+║  📁 مسیر نصب: $InstallPath
+║  📄 فایل لاگ: $Script:LogFile                      ║
+╚══════════════════════════════════════════════════════════════╝
+
+"@
+    
+    if ($Script:ErrorCount -eq 0) {
+        Write-Host $summary -ForegroundColor Green
+    } else {
+        Write-Host $summary -ForegroundColor Yellow
+    }
+}
+
+# ====================================================================
+# تابع اصلی نصب
+# ====================================================================
+
+function Start-Installation {
+    # نمایش راهنما
+    if ($Help) {
+        Show-Help
+    }
+    
+    # نمایش بنر
+    Show-Banner
+    
+    # شروع لاگ
+    "=== Assistant Journalist Bot Installation Log ===" | Out-File -FilePath $Script:LogFile -Encoding UTF8
+    "Start Time: $(Get-Date)" | Out-File -FilePath $Script:LogFile -Append -Encoding UTF8
+    "Install Path: $InstallPath" | Out-File -FilePath $Script:LogFile -Append -Encoding UTF8
+    
+    Write-Info "شروع نصب ربات دستیار خبرنگار..."
+    Write-Info "مسیر نصب: $InstallPath"
+    Write-Info "فایل لاگ: $Script:LogFile"
+    
+    # بررسی پیش‌نیازها
+    if (-not (Test-AdminRights)) {
+        Write-Error "این اسکریپت نیاز به دسترسی مدیریت دارد"
+        Write-Info "لطفاً PowerShell را با 'Run as Administrator' اجرا کنید"
+        exit 1
+    }
+    
+    if (-not (Test-InternetConnection)) {
+        Write-Error "اتصال به اینترنت برقرار نیست"
+        Write-Info "لطفاً اتصال اینترنت خود را بررسی کنید"
+        exit 1
+    }
+    
+    Write-Success "بررسی پیش‌نیازها کامل شد"
+    
+    # مراحل نصب
+    $installSteps = @(
+        @{ Name = "Chocolatey"; Function = { Install-Chocolatey } },
+        @{ Name = "Python"; Function = { Install-Python } },
+        @{ Name = "Git"; Function = { Install-Git } },
+        @{ Name = "FFmpeg"; Function = { Install-FFmpeg } },
+        @{ Name = "Bot Source"; Function = { Download-BotSource } },
+        @{ Name = "Python Environment"; Function = { Setup-PythonEnvironment } },
+        @{ Name = "Config File"; Function = { Create-ConfigFile } },
+        @{ Name = "Startup Scripts"; Function = { Create-StartupScripts } },
+        @{ Name = "Desktop Shortcut"; Function = { Create-DesktopShortcut } },
+        @{ Name = "Installation Test"; Function = { Test-BotInstallation } }
+    )
+    
+    $completedSteps = 0
+    foreach ($step in $installSteps) {
+        Write-Info "مرحله $($completedSteps + 1)/$($installSteps.Count): $($step.Name)"
+        
+        $result = & $step.Function
+        
+        if ($result) {
+            $completedSteps++
+            Write-Success "مرحله $($step.Name) کامل شد ✓"
+        } else {
+            Write-Error "مرحله $($step.Name) ناموفق بود ✗"
+            
+            if (-not $Silent) {
+                $continue = Read-Host "آیا می‌خواهید ادامه دهید؟ (y/N)"
+                if ($continue -ne 'y' -and $continue -ne 'Y') {
+                    Write-Info "نصب لغو شد"
+                    exit 1
+                }
+            }
+        }
+        
+        Write-Host ""
+    }
+    
+    # نمایش خلاصه
+    Show-InstallSummary
+    
+    # دستورالعمل‌های پس از نصب
+    if ($Script:ErrorCount -eq 0) {
+        Show-PostInstallInstructions
+    } else {
+        Write-Warning "نصب با $Script:ErrorCount خطا کامل شد"
+        Write-Info "لطفاً فایل لاگ را بررسی کنید: $Script:LogFile"
+    }
+    
+    # تمیز کردن
+    if (-not $Silent) {
+        Write-Host "برای خروج کلیدی را فشار دهید..." -ForegroundColor Gray
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    }
+}
+
+# ====================================================================
+# اسکریپت‌های کمکی اضافی
+# ====================================================================
+
+function New-UninstallScript {
+    $uninstallScript = @"
+# Assistant Journalist Bot - Uninstaller
+# حذف کامل ربات دستیار خبرنگار
+
+param(
+    [switch]`$Force,
+    [switch]`$KeepConfig
+)
+
+`$BotPath = "$InstallPath"
+
+Write-Host "🗑️  حذف Assistant Journalist Bot..." -ForegroundColor Red
+
+if (-not `$Force) {
+    `$confirm = Read-Host "آیا مطمئن هستید؟ (y/N)"
+    if (`$confirm -ne 'y' -and `$confirm -ne 'Y') {
+        Write-Host "لغو شد" -ForegroundColor Yellow
+        exit 0
+    }
+}
+
+# حذف فایل‌ها
+if (Test-Path `$BotPath) {
+    if (`$KeepConfig -and (Test-Path "`$BotPath\.env")) {
+        `$backupConfig = "`$env:USERPROFILE\Desktop\assistant-bot-config-backup.env"
+        Copy-Item "`$BotPath\.env" `$backupConfig
+        Write-Host "✅ فایل تنظیمات در دسکتاپ پشتیبان شد" -ForegroundColor Green
+    }
+    
+    Remove-Item `$BotPath -Recurse -Force
+    Write-Host "✅ فایل‌های ربات حذف شدند" -ForegroundColor Green
+}
+
+# حذف میانبر
+`$shortcut = "`$env:USERPROFILE\Desktop\Assistant Journalist Bot.lnk"
+if (Test-Path `$shortcut) {
+    Remove-Item `$shortcut -Force
+    Write-Host "✅ میانبر دسکتاپ حذف شد" -ForegroundColor Green
+}
+
+Write-Host "🎉 حذف کامل شد!" -ForegroundColor Green
+pause
+"@
+    
+    Set-Content -Path "$InstallPath\uninstall.ps1" -Value $uninstallScript -Encoding UTF8
+}
+
+function New-UpdateScript {
+    $updateScript = @"
+# Assistant Journalist Bot - Updater
+# به‌روزرسانی ربات دستیار خبرنگار
+
+`$BotPath = Split-Path -Parent `$MyInvocation.MyCommand.Definition
+Set-Location `$BotPath
+
+Write-Host "🔄 به‌روزرسانی Assistant Journalist Bot..." -ForegroundColor Cyan
+
+# پشتیبان‌گیری از تنظیمات
+if (Test-Path ".env") {
+    Copy-Item ".env" ".env.backup"
+    Write-Host "✅ فایل تنظیمات پشتیبان شد" -ForegroundColor Green
+}
+
+# دریافت آخرین تغییرات
+try {
+    git pull origin main
+    Write-Host "✅ کد منبع به‌روزرسانی شد" -ForegroundColor Green
+} catch {
+    Write-Host "❌ خطا در به‌روزرسانی: `$(`$_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+
+# به‌روزرسانی کتابخانه‌ها
+Write-Host "📦 به‌روزرسانی کتابخانه‌های Python..." -ForegroundColor Yellow
+& "venv\Scripts\python.exe" -m pip install --upgrade pip
+& "venv\Scripts\python.exe" -m pip install -r requirements.txt --upgrade
+
+# بازیابی تنظیمات
+if (Test-Path ".env.backup") {
+    Move-Item ".env.backup" ".env"
+    Write-Host "✅ تنظیمات بازیابی شد" -ForegroundColor Green
+}
+
+# تست
+Write-Host "🧪 تست ربات..." -ForegroundColor Yellow
+`$test = & "venv\Scripts\python.exe" main.py --version 2>&1
+if (`$test -match "Assistant Journalist Bot") {
+    Write-Host "✅ به‌روزرسانی کامل شد: `$test" -ForegroundColor Green
+} else {
+    Write-Host "❌ مشکل در به‌روزرسانی: `$test" -ForegroundColor Red
+}
+
+pause
+"@
+    
+    Set-Content -Path "$InstallPath\update.ps1" -Value $updateScript -Encoding UTF8
+}
+
+function New-ConfigHelper {
+    $configHelper = @"
+# Assistant Journalist Bot - Config Helper
+# راهنمای تنظیم فایل .env
+
+Write-Host "⚙️  راهنمای تنظیم Assistant Journalist Bot" -ForegroundColor Cyan
+Write-Host "=" * 50
+
+# بررسی فایل .env
+if (-not (Test-Path ".env")) {
+    Write-Host "❌ فایل .env یافت نشد!" -ForegroundColor Red
+    exit 1
+}
+
+# خواندن تنظیمات فعلی
+`$envContent = Get-Content ".env"
+`$config = @{}
+
+foreach (`$line in `$envContent) {
+    if (`$line -match "^([A-Z_]+)=(.*)") {
+        `$config[`$matches[1]] = `$matches[2]
+    }
+}
+
+Write-Host ""
+Write-Host "📋 وضعیت تنظیمات فعلی:" -ForegroundColor Yellow
+Write-Host ""
+
+# بررسی BOT_TOKEN
+if (`$config.BOT_TOKEN -and `$config.BOT_TOKEN -ne "your_telegram_bot_token_here") {
+    Write-Host "✅ BOT_TOKEN: تنظیم شده" -ForegroundColor Green
+} else {
+    Write-Host "❌ BOT_TOKEN: تنظیم نشده" -ForegroundColor Red
+    Write-Host "   👉 برای دریافت به @BotFather در تلگرام مراجعه کنید" -ForegroundColor Gray
+}
+
+# بررسی API Keys
+`$hasAI = `$false
+if (`$config.OPENAI_API_KEY -and `$config.OPENAI_API_KEY -ne "sk-proj-your_openai_key_here") {
+    Write-Host "✅ OPENAI_API_KEY: تنظیم شده" -ForegroundColor Green
+    `$hasAI = `$true
+} else {
+    Write-Host "⚠️  OPENAI_API_KEY: تنظیم نشده" -ForegroundColor Yellow
+}
+
+if (`$config.GEMINI_API_KEY -and `$config.GEMINI_API_KEY -ne "your_gemini_key_here") {
+    Write-Host "✅ GEMINI_API_KEY: تنظیم شده" -ForegroundColor Green
+    `$hasAI = `$true
+} else {
+    Write-Host "⚠️  GEMINI_API_KEY: تنظیم نشده" -ForegroundColor Yellow
+}
+
+if (-not `$hasAI) {
+    Write-Host "❌ هیچ AI API تنظیم نشده! حداقل یکی ضروری است" -ForegroundColor Red
+}
+
+Write-Host ""
+Write-Host "🔗 لینک‌های مفید:" -ForegroundColor Cyan
+Write-Host "   • Telegram Bot: https://t.me/BotFather" -ForegroundColor Gray
+Write-Host "   • OpenAI API: https://platform.openai.com/api-keys" -ForegroundColor Gray
+Write-Host "   • Gemini API: https://ai.google.dev" -ForegroundColor Gray
+
+Write-Host ""
+if (`$config.BOT_TOKEN -ne "your_telegram_bot_token_here" -and `$hasAI) {
+    Write-Host "🎉 تنظیمات کامل است! می‌توانید ربات را اجرا کنید" -ForegroundColor Green
+} else {
+    Write-Host "⚠️  لطفاً ابتدا تنظیمات را کامل کنید" -ForegroundColor Yellow
+}
+
+pause
+"@
+    
+    Set-Content -Path "$InstallPath\config-helper.ps1" -Value $configHelper -Encoding UTF8
+}
+
+# ====================================================================
+# اجرای اسکریپت
+# ====================================================================
+
+# بررسی اجرا از PowerShell
+if ($MyInvocation.MyCommand.CommandType -eq "ExternalScript") {
+    # اجرا شده از فایل
+    try {
+        Start-Installation
+        
+        # ایجاد اسکریپت‌های کمکی
+        if ($Script:ErrorCount -eq 0) {
+            New-UninstallScript
+            New-UpdateScript  
+            New-ConfigHelper
+            Write-Info "اسکریپت‌های کمکی ایجاد شدند"
+        }
+        
+    } catch {
+        Write-Error "خطای کلی در نصب: $($_.Exception.Message)"
+        Write-Info "فایل لاگ: $Script:LogFile"
+        exit 1
+    }
+} else {
+    # اجرا شده مستقیماً
+    Write-Host "🚀 برای اجرای این اسکریپت، آن را به عنوان فایل .ps1 ذخیره کنید" -ForegroundColor Yellow
+    Write-Host "مثال: .\install.ps1" -ForegroundColor Gray
+}
+
+# ====================================================================
+# پایان اسکریپت
+# ====================================================================
+
+<#
+.SYNOPSIS
+    اسکریپت نصب خودکار ربات دستیار خبرنگار برای ویندوز
+
+.DESCRIPTION
+    این اسکریپت به طور خودکار تمام پیش‌نیازها و خود ربات را نصب می‌کند:
+    - Python 3.11
+    - Git  
+    - FFmpeg
+    - کتابخانه‌های Python
+    - کد منبع ربات
+    - تنظیمات اولیه
+
+.PARAMETER InstallPath
+    مسیر نصب ربات (پیش‌فرض: %USERPROFILE%\AssistantJournalistBot)
+
+.PARAMETER GitRepo
+    آدرس مخزن Git
+
+.PARAMETER SkipChocolatey
+    عدم نصب Chocolatey
+
+.PARAMETER SkipPython
+    عدم نصب Python
+
+.PARAMETER SkipGit
+    عدم نصب Git
+
+.PARAMETER SkipFFmpeg
+    عدم نصب FFmpeg
+
+.PARAMETER Silent
+    حالت ساکت (بدون تعامل)
+
+.PARAMETER Help
+    نمایش راهنما
+
+.EXAMPLE
+    .\install.ps1
+    نصب معمولی با تنظیمات پیش‌فرض
+
+.EXAMPLE
+    .\install.ps1 -InstallPath "C:\Bots\JournalistBot" -Silent
+    نصب در مسیر سفارشی به صورت ساکت
+
+.EXAMPLE
+    .\install.ps1 -SkipChocolatey -SkipPython
+    نصب بدون Chocolatey و Python (اگر قبلاً نصب شده‌اند)
+
+.NOTES
+    نویسنده: Assistant Journalist Bot Team
+    نسخه: 1.0.0
+    نیاز به دسترسی مدیریت دارد
+    برای ویندوز 10+ و PowerShell 5.1+
+
+.LINK
+    https://github.com/your-username/assistant-journalist-bot
+#>

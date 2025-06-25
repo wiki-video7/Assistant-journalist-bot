@@ -526,3 +526,447 @@ cp .env.example .env.production
 
 # اجرا
 docker-compose -f docker-compose.prod.yml up -d
+
+# مانیتورینگ
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### ☁️ استقرار در Cloud
+
+#### AWS EC2
+```bash
+# 1. ایجاد instance
+aws ec2 run-instances \
+  --image-id ami-0abcdef1234567890 \
+  --count 1 \
+  --instance-type t3.medium \
+  --key-name my-key-pair
+
+# 2. نصب Docker
+sudo yum update -y
+sudo yum install -y docker
+sudo service docker start
+
+# 3. استقرار
+git clone https://github.com/your-repo/assistant-journalist-bot.git
+cd assistant-journalist-bot
+sudo docker-compose -f docker-compose.prod.yml up -d
+```
+
+#### Google Cloud Run
+```bash
+# 1. ساخت image
+gcloud builds submit --tag gcr.io/PROJECT-ID/journalist-bot
+
+# 2. استقرار
+gcloud run deploy --image gcr.io/PROJECT-ID/journalist-bot \
+  --platform managed \
+  --memory 2Gi \
+  --cpu 1 \
+  --max-instances 10
+```
+
+#### DigitalOcean Droplet
+```bash
+# 1. ایجاد Droplet
+doctl compute droplet create assistant-bot \
+  --size s-2vcpu-4gb \
+  --image ubuntu-20-04-x64 \
+  --region nyc1
+
+# 2. نصب و راه‌اندازی
+ssh root@droplet-ip
+curl -fsSL https://get.docker.com | sh
+git clone https://github.com/your-repo/assistant-journalist-bot.git
+cd assistant-journalist-bot
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### 🔒 امنیت Production
+
+#### SSL/TLS
+```bash
+# نصب Certbot
+sudo apt install certbot python3-certbot-nginx
+
+# دریافت گواهی SSL
+sudo certbot --nginx -d yourdomain.com
+
+# تجدید خودکار
+sudo crontab -e
+# اضافه کردن:
+0 12 * * * /usr/bin/certbot renew --quiet
+```
+
+#### Firewall
+```bash
+# UFW (Ubuntu)
+sudo ufw allow ssh
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw enable
+
+# iptables
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+```
+
+#### Environment Security
+```bash
+# تنظیمات امن .env.production
+chmod 600 .env.production
+chown root:root .env.production
+
+# استفاده از secrets
+docker secret create bot_token /path/to/bot_token.txt
+```
+
+### 📊 مانیتورینگ Production
+
+#### Prometheus + Grafana
+```yaml
+# docker-compose.monitoring.yml
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+```
+
+#### Log Aggregation
+```bash
+# ELK Stack
+docker run -d --name elasticsearch \
+  -p 9200:9200 -p 9300:9300 \
+  -e "discovery.type=single-node" \
+  elasticsearch:7.14.0
+
+docker run -d --name kibana \
+  -p 5601:5601 \
+  --link elasticsearch:elasticsearch \
+  kibana:7.14.0
+```
+
+---
+
+## 🔧 عیب‌یابی
+
+### ❌ مشکلات رایج
+
+#### 1. خطای "ModuleNotFoundError"
+```bash
+# حل:
+source venv/bin/activate  # فعال‌سازی مجدد محیط مجازی
+pip install -r requirements.txt  # نصب مجدد وابستگی‌ها
+```
+
+#### 2. خطای "FFmpeg not found"
+```bash
+# Ubuntu/Debian:
+sudo apt update && sudo apt install ffmpeg
+
+# CentOS/RHEL:
+sudo yum install epel-release && sudo yum install ffmpeg
+
+# macOS:
+brew install ffmpeg
+
+# Windows:
+choco install ffmpeg
+```
+
+#### 3. خطای "API Rate Limit"
+```bash
+# بررسی تنظیمات Rate Limiting
+grep -i "rate" .env
+
+# کاهش تعداد درخواست‌ها
+echo "MAX_REQUESTS_PER_MINUTE=10" >> .env
+```
+
+#### 4. خطای "Memory Error"
+```bash
+# افزایش حافظه Docker
+docker-compose -f docker-compose.yml up -d --memory 2g
+
+# یا تنظیم در docker-compose.yml:
+services:
+  journalist-bot:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+```
+
+### 🔍 ابزارهای Debug
+
+#### لاگ‌های تفصیلی
+```bash
+# فعال‌سازی debug mode
+export LOG_LEVEL=DEBUG
+python main.py
+
+# مشاهده لاگ‌های real-time
+tail -f logs/bot.log | grep ERROR
+```
+
+#### پروفایلینگ عملکرد
+```python
+# اضافه کردن به main.py
+import cProfile
+import pstats
+
+def profile_bot():
+    pr = cProfile.Profile()
+    pr.enable()
+    # کد ربات
+    pr.disable()
+    stats = pstats.Stats(pr)
+    stats.dump_stats('bot_profile.prof')
+```
+
+#### Memory Profiling
+```bash
+# نصب memory profiler
+pip install memory-profiler
+
+# اجرا با profiler
+python -m memory_profiler main.py
+```
+
+### 📞 دریافت کمک
+
+#### 1. بررسی مستندات
+- [راهنمای نصب کامل](install_guide.md)
+- [مستندات API](docs/api.md)
+- [FAQ](docs/faq.md)
+
+#### 2. لاگ‌های سیستم
+```bash
+# جمع‌آوری اطلاعات debug
+python main.py --debug-info > debug_report.txt
+```
+
+#### 3. گزارش مشکل
+قبل از گزارش مشکل، لطفاً این اطلاعات را آماده کنید:
+- نسخه Python: `python --version`
+- نسخه ربات: `python main.py --version`
+- سیستم عامل و نسخه
+- متن کامل خطا
+- فایل لاگ (logs/bot.log)
+
+---
+
+## 🤝 مشارکت
+
+ما از مشارکت شما استقبال می‌کنیم! 🎉
+
+### 🌟 نحوه مشارکت
+
+#### 1. Fork و Clone
+```bash
+# Fork repository در GitHub
+git clone https://github.com/YOUR_USERNAME/assistant-journalist-bot.git
+cd assistant-journalist-bot
+```
+
+#### 2. Development Environment
+```bash
+# ایجاد branch جدید
+git checkout -b feature/amazing-feature
+
+# نصب dev dependencies
+pip install -r requirements-dev.txt
+
+# نصب pre-commit hooks
+pre-commit install
+```
+
+#### 3. Coding Standards
+```bash
+# فرمت کردن کد
+black .
+isort .
+
+# بررسی کیفیت کد
+flake8 .
+pylint src/
+
+# تست‌ها
+pytest tests/ -v
+```
+
+#### 4. ارسال تغییرات
+```bash
+# Commit با پیام معنادار
+git add .
+git commit -m "feat: add amazing new feature"
+
+# Push کردن
+git push origin feature/amazing-feature
+
+# ایجاد Pull Request در GitHub
+```
+
+### 📋 راهنمای مشارکت
+
+#### 🎯 نوع مشارکت‌ها
+- **🐛 Bug Fixes** - رفع اشکالات
+- **✨ New Features** - ویژگی‌های جدید  
+- **📚 Documentation** - بهبود مستندات
+- **🎨 UI/UX** - بهبود رابط کاربری
+- **⚡ Performance** - بهینه‌سازی عملکرد
+- **🔒 Security** - بهبود امنیت
+
+#### 📝 استانداردهای کد
+- **Python Style**: PEP 8
+- **Docstrings**: Google Style
+- **Type Hints**: فعال برای توابع عمومی
+- **Comments**: به زبان فارسی یا انگلیسی
+- **Tests**: برای تمام ویژگی‌های جدید
+
+#### 🏷️ Commit Messages
+```bash
+# فرمت:
+type(scope): description
+
+# مثال‌ها:
+feat(ai): add sentiment analysis
+fix(bot): resolve memory leak issue
+docs(readme): update installation guide
+style(core): format code with black
+refactor(handlers): improve error handling
+test(ai): add unit tests for cache
+```
+
+### 🏆 تشویق مشارکت‌کنندگان
+
+#### 🎖️ Hall of Fame
+بهترین مشارکت‌کنندگان ماه:
+- [@contributor1](https://github.com/contributor1) - 15 commits
+- [@contributor2](https://github.com/contributor2) - 8 bug fixes
+- [@contributor3](https://github.com/contributor3) - Documentation
+
+#### 🎁 پاداش‌ها
+- **First Contribution**: Badge ویژه
+- **Bug Hunter**: یافتن 5+ باگ
+- **Feature Creator**: اضافه کردن 3+ ویژگی
+- **Documentation Master**: بهبود مستندات
+
+---
+
+## 📄 مجوز
+
+این پروژه تحت [مجوز MIT](LICENSE) منتشر شده است.
+
+```
+MIT License
+
+Copyright (c) 2025 Assistant Journalist Bot Team
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+```
+
+---
+
+## 🆘 پشتیبانی
+
+### 📞 راه‌های تماس
+
+#### 🐛 گزارش باگ
+[![GitHub Issues](https://img.shields.io/github/issues/your-username/assistant-journalist-bot)](https://github.com/your-username/assistant-journalist-bot/issues)
+
+برای گزارش باگ، لطفاً از [GitHub Issues](https://github.com/your-username/assistant-journalist-bot/issues/new?template=bug_report.md) استفاده کنید.
+
+#### 💡 درخواست ویژگی
+[![Feature Request](https://img.shields.io/badge/feature-request-brightgreen)](https://github.com/your-username/assistant-journalist-bot/issues/new?template=feature_request.md)
+
+برای درخواست ویژگی جدید، از [اینجا](https://github.com/your-username/assistant-journalist-bot/issues/new?template=feature_request.md) استفاده کنید.
+
+#### 💬 پشتیبانی عمومی
+- **تلگرام**: [@assistant_journalist_support](https://t.me/assistant_journalist_support)
+- **ایمیل**: support@assistant-journalist-bot.com
+- **Discord**: [سرور Discord ما](https://discord.gg/your-invite)
+
+#### 📚 منابع آموزشی
+- **مستندات کامل**: [docs.assistant-journalist-bot.com](https://docs.assistant-journalist-bot.com)
+- **ویدیوهای آموزشی**: [کانال یوتیوب](https://youtube.com/channel/your-channel)
+- **مقالات**: [وبلاگ](https://blog.assistant-journalist-bot.com)
+
+### ⏰ زمان پاسخ‌گویی
+- **باگ‌های Critical**: کمتر از 24 ساعت
+- **سوالات عمومی**: 2-3 روز کاری
+- **درخواست ویژگی**: 1 هفته برای بررسی
+
+### 🌐 کامیونیتی
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/assistant_journalist_community)
+[![Discord](https://img.shields.io/badge/Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/your-invite)
+[![Reddit](https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://reddit.com/r/AssistantJournalistBot)
+
+---
+
+## 🎉 تشکر ویژه
+
+### 💝 حامیان مالی
+- **OpenAI** - ارائه API credits
+- **Google Cloud** - سرویس‌های ابری رایگان
+- **JetBrains** - لایسنس PyCharm
+
+### 🤝 مشارکت‌کنندگان
+```
+Contributors:
+┌─────────────────────────────────────────────┐
+│  👨‍💻 Lead Developer     │  🎨 UI/UX Designer     │
+│  📚 Documentation Lead │  🔒 Security Expert    │
+│  🧪 QA Engineer        │  🌐 DevOps Engineer    │
+└─────────────────────────────────────────────┘
+```
+
+### 🙏 تشکر از
+- **جامعه Python** - ابزارها و کتابخانه‌های فوق‌العاده
+- **تیم Telegram** - API و پلتفرم عالی
+- **کاربران Beta** - فیدبک‌های ارزشمند
+
+---
+
+<div align="center">
+
+## 🌟 ستاره‌دهی
+
+اگر این پروژه برایتان مفید بود، لطفاً ⭐ ستاره دهید!
+
+[![GitHub stars](https://img.shields.io/github/stars/your-username/assistant-journalist-bot?style=social)](https://github.com/your-username/assistant-journalist-bot/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/your-username/assistant-journalist-bot?style=social)](https://github.com/your-username/assistant-journalist-bot/network/members)
+[![GitHub watchers](https://img.shields.io/github/watchers/your-username/assistant-journalist-bot?style=social)](https://github.com/your-username/assistant-journalist-bot/watchers)
+
+---
+
+**🚀 آماده تبدیل شدن به قدرتمندترین دستیار خبرنگاری!**
+
+*با ❤️ ساخته شده برای جامعه خبرنگاری ایران*
+
+</div>
